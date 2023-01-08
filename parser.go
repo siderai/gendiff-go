@@ -2,6 +2,21 @@ package main
 
 import (
 	"fmt"
+	"reflect"
+)
+
+type NodeCompared struct {
+	value  string
+	status NodeComparisonStatus
+}
+
+type NodeComparisonStatus string
+
+const (
+	Equal   NodeComparisonStatus = "Equal"
+	Deleted                      = "Deleted"
+	Added                        = "Added"
+	Nested                       = "Nested"
 )
 
 func main() {
@@ -24,21 +39,58 @@ func main() {
 	for key, value := range anotherMap {
 		fmt.Println(key, value)
 	}
-
-	keys_first := make([]string, 0, len(iMap))
-	for k := range iMap {
-		keys_first = append(keys_first, k)
-	}
-	keys_second := make([]string, 0, len(anotherMap))
-	for k := range anotherMap {
-		keys_second = append(keys_second, k)
-	}
-	fmt.Println("First only", makeDiff(keys_first, keys_second))
-	fmt.Println("Second only", makeDiff(keys_second, keys_first))
-	fmt.Println("Common", makeIntersection(keys_second, keys_first))
+	makeDiff(iMap, anotherMap)
 }
 
-func makeDiff(a, b []string) []string {
+func makeDiff(firstMap, secondMap map[string]interface{}) map[NodeCompared]interface{} {
+	// extract keys
+	keys_first := make([]string, 0, len(firstMap))
+	for k := range firstMap {
+		keys_first = append(keys_first, k)
+	}
+	keys_second := make([]string, 0, len(secondMap))
+	for k := range secondMap {
+		keys_second = append(keys_second, k)
+	}
+	fmt.Println("First only", diffKeys(keys_first, keys_second))
+	fmt.Println("Second only", diffKeys(keys_second, keys_first))
+	fmt.Println("Common", findKeysIntersection(keys_second, keys_first))
+
+	// group keys
+
+	// firstOnlyKeys := diffKeys(keys_first, keys_second)
+	// secondOnlyKeys := diffKeys(keys_second, keys_first)
+	commonKeys := findKeysIntersection(keys_second, keys_first)
+
+	var diff map[NodeCompared]interface{}
+	fmt.Println("diff init", diff)
+
+	for _, key := range commonKeys {
+
+		valueInFirst := firstMap[key]
+		valueInSecond := secondMap[key]
+
+		var res NodeCompared
+		if valueInFirst == valueInSecond {
+			res = NodeCompared{status: Equal, value: key}
+			diff[res] = valueInFirst
+		} else if isMap(valueInFirst) && isMap(valueInSecond) {
+			res = NodeCompared{status: Nested, value: makeDiff(valueInFirst, valueInSecond)}
+		} else {
+			diff[NodeCompared{status: Deleted, value: key}] = valueInFirst
+			diff[NodeCompared{status: Added, value: key}] = valueInSecond
+		}
+	}
+
+	fmt.Println("diff internal representation", diff)
+	return diff
+}
+
+func isMap(node interface{}) bool {
+	return reflect.ValueOf(node).Kind() == reflect.Map
+}
+
+func diffKeys(a, b []string) []string {
 	mb := make(map[string]struct{}, len(b))
 	for _, x := range b {
 		mb[x] = struct{}{}
@@ -52,7 +104,7 @@ func makeDiff(a, b []string) []string {
 	return diff
 }
 
-func makeIntersection(a, b []string) []string {
+func findKeysIntersection(a, b []string) []string {
 	mb := make(map[string]struct{}, len(b))
 	for _, x := range b {
 		mb[x] = struct{}{}
@@ -64,4 +116,10 @@ func makeIntersection(a, b []string) []string {
 		}
 	}
 	return diff
+}
+
+// store results in struct. Create
+
+// TODO method to translate any value into string
+func (kcr *NodeComparisonResult) toString() {
 }
